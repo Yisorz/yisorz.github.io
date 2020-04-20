@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="ch">
+<head>
+    <meta charset="UTF-8">
+<meta name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+<meta http-equiv="X-UA-Compatible" content="ie=edge">
+
+    <meta name="author" content="yisorz">
+
+
+
+
+
+<title>JVM-内存模型 | 道阻且长</title>
+
+
+
+    <link rel="icon" href="/favicon.ico">
+
+
+
+
+    <!-- stylesheets list from _config.yml -->
+    
+    <link rel="stylesheet" href="/css/style.css">
+    
+
+
+
+    <!-- scripts list from _config.yml -->
+    
+    <script src="/js/script.js"></script>
+    
+    <script src="/js/tocbot.min.js"></script>
+    
+
+
+
+    
+    
+        
+    
+
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+<body>
+    <div class="wrapper">
+        <header>
+    <nav class="navbar">
+        <div class="container">
+            <div class="navbar-header header-logo"><a href="/">Yisorz&#39;s Blog</a></div>
+            <div class="menu navbar-right">
+                
+                    <a class="menu-item" href="/archives">Posts</a>
+                
+                    <a class="menu-item" href="/category">Categories</a>
+                
+                    <a class="menu-item" href="/tag">Tags</a>
+                
+                    <a class="menu-item" href="/about">About</a>
+                
+                <input id="switch_default" type="checkbox" class="switch_default">
+                <label for="switch_default" class="toggleBtn"></label>
+            </div>
+        </div>
+    </nav>
+
+    
+    <nav class="navbar-mobile" id="nav-mobile">
+        <div class="container">
+            <div class="navbar-header">
+                <div>
+                    <a href="/">Yisorz&#39;s Blog</a><a id="mobile-toggle-theme">·&nbsp;Light</a>
+                </div>
+                <div class="menu-toggle" onclick="mobileBtn()">&#9776; Menu</div>
+            </div>
+            <div class="menu" id="mobile-menu">
+                
+                    <a class="menu-item" href="/archives">Posts</a>
+                
+                    <a class="menu-item" href="/category">Categories</a>
+                
+                    <a class="menu-item" href="/tag">Tags</a>
+                
+                    <a class="menu-item" href="/about">About</a>
+                
+            </div>
+        </div>
+    </nav>
+
+</header>
+<script>
+    var mobileBtn = function f() {
+        var toggleMenu = document.getElementsByClassName("menu-toggle")[0];
+        var mobileMenu = document.getElementById("mobile-menu");
+        if(toggleMenu.classList.contains("active")){
+           toggleMenu.classList.remove("active")
+            mobileMenu.classList.remove("active")
+        }else{
+            toggleMenu.classList.add("active")
+            mobileMenu.classList.add("active")
+        }
+    }
+</script>
+        <div class="main">
+            <div class="container">
+    
+    
+        <div class="post-toc">
+    <div class="tocbot-list">
+    </div>
+    <div class="tocbot-list-menu">
+        <a class="tocbot-toc-expand" onclick="expand_toc()">Expand all</a>
+        <a onclick="go_top()">Back to top</a>
+        <a onclick="go_bottom()">Go to bottom</a>
+    </div>
+</div>
+
+<script>
+    document.ready(
+        function () {
+            tocbot.init({
+                tocSelector: '.tocbot-list',
+                contentSelector: '.post-content',
+                headingSelector: 'h1, h2, h3, h4, h5',
+                collapseDepth: 1,
+                orderedList: false,
+                scrollSmooth: true,
+            })
+        }
+    )
+
+    function expand_toc() {
+        var b = document.querySelector(".tocbot-toc-expand");
+        tocbot.init({
+            tocSelector: '.tocbot-list',
+            contentSelector: '.post-content',
+            headingSelector: 'h1, h2, h3, h4, h5',
+            collapseDepth: 6,
+            orderedList: false,
+            scrollSmooth: true,
+        });
+        b.setAttribute("onclick", "collapse_toc()");
+        b.innerHTML = "Collapse all"
+    }
+
+    function collapse_toc() {
+        var b = document.querySelector(".tocbot-toc-expand");
+        tocbot.init({
+            tocSelector: '.tocbot-list',
+            contentSelector: '.post-content',
+            headingSelector: 'h1, h2, h3, h4, h5',
+            collapseDepth: 1,
+            orderedList: false,
+            scrollSmooth: true,
+        });
+        b.setAttribute("onclick", "expand_toc()");
+        b.innerHTML = "Expand all"
+    }
+
+    function go_top() {
+        window.scrollTo(0, 0);
+    }
+
+    function go_bottom() {
+        window.scrollTo(0, document.body.scrollHeight);
+    }
+
+</script>
+    
+
+    
+    <article class="post-wrap">
+        <header class="post-header">
+            <h1 class="post-title">JVM-内存模型</h1>
+            
+                <div class="post-meta">
+                    
+                        Author: <a itemprop="author" rel="author" href="/">yisorz</a>
+                    
+
+                    
+                        <span class="post-time">
+                        Date: <a href="#">April 20, 2020&nbsp;&nbsp;22:25:17</a>
+                        </span>
+                    
+                    
+                        <span class="post-category">
+                    Category:
+                            
+                                <a href="/categories/JAVA/">JAVA</a>
+                            
+                        </span>
+                    
+                </div>
+            
+        </header>
+
+        <div class="post-content">
+            <h1 id="背景"><a href="#背景" class="headerlink" title="背景"></a>背景</h1><p>对于Java来说，虚拟机有自动内存管理机制，不需要自己手动去管理对象的内存空间创建、删除等操作，但了解内存结构，对于在内存溢出、内存泄漏时排查问题有很大的帮助</p>
+<h1 id="内存模型"><a href="#内存模型" class="headerlink" title="内存模型"></a>内存模型</h1><div class="image-box">
+                <img src="JVM-memory-model.png" alt="深入理解Java虚拟机-Java虚拟机运行时数据区" title="" class="">
+                <p class="image-box-title">深入理解Java虚拟机-Java虚拟机运行时数据区</p>
+            </div>
+
+<h2 id="线程私有区域"><a href="#线程私有区域" class="headerlink" title="线程私有区域"></a>线程私有区域</h2><h3 id="程序计数器"><a href="#程序计数器" class="headerlink" title="程序计数器"></a>程序计数器</h3><p>程序计数器是一块较小的内存空间，可看作当前线程锁执行的字节码行号指示器。字节码解释工作时就是通过改变这个计数器的值来选取下一条需要执行的字节码指令。</p>
+<p>每一条线程都会单独存储自己的程序计数器，彼此互不影响。当线程执行java方法时，计数器记录的时正在执行的虚拟机字节码指令地址；如果执行的时本地方法(Native)方法，计数器值为空(Undefined)</p>
+<p>该内存区域时唯一一个在《Java虚拟机规范》中没规定任何OutOfMemoryError情况的区域</p>
+<h3 id="虚拟机栈"><a href="#虚拟机栈" class="headerlink" title="虚拟机栈"></a>虚拟机栈</h3><p>平时常说的栈，属于线程私有，生命周期与线程相同。</p>
+<p>每个方法被执行时，虚拟机都会同步创建一个栈帧用于存储局部变量表、操作数栈、动态连接、方法出口等信息。当方法被调用时对应着一个栈帧在虚拟机栈中入栈，方法调用完毕时栈帧在虚拟机栈中出栈。</p>
+<p>栈帧存储的局部变量表中，存放了编译器可知的各种java基本数据类型(byte、short、int、long、double、float、boolean、char)、对象引用(reference)和returnAddress类型(指向一条字节码指令的地址)；这些数据类型在局部变量表中，以局部变量槽(Slot)表示，其中long和double这两个64位的数据会占用两个变量槽，其余数据类型只占用一个(该特性会导致在64位环境下，对于long和double类型数据的操作无法保持线程安全，当线程共享该类型数据时必须加synchronized或者声明为volatile)</p>
+<p>对于该内存区域，《Java虚拟机规范》中规定了两类异常情景：<br>1、如果该线程请求的栈深度大于虚拟机所允许的深度，会抛出StackOverflowError异常<br>2、如果当前虚拟机栈容量可以动态扩展，当栈扩展无法申请到足够内存时会抛出OutOfMemoryError异常</p>
+<h3 id="本地方法栈"><a href="#本地方法栈" class="headerlink" title="本地方法栈"></a>本地方法栈</h3><p>与虚拟机栈作用类似，区别在于本地方法栈是为虚拟机使用到的本地(Native)方法服务</p>
+<p>本地方法栈也会在栈深度溢出或栈扩展失败时分别抛出StackOverflowError和OutOfMemoryError异常</p>
+<h2 id="公共区域"><a href="#公共区域" class="headerlink" title="公共区域"></a>公共区域</h2><h3 id="方法区"><a href="#方法区" class="headerlink" title="方法区"></a>方法区</h3><p>方法区也叫非堆(Non-Heap)，用于存储已被虚拟机加载的类型信息、常量、静态变量、即使编译器编译后的diamagnetic缓存等数据，被所有线程共享</p>
+<p>从垃圾收集的分代角度看，方法区常被人叫做永久代(jdk8以后用元空间来代替永久代，方法区也并入了堆中)，本质上两者并不等价，仅仅是当时的HotSpot虚拟机使用永久代来实现方法区而已，使得垃圾收集器能够像管理堆一样来管理方法区</p>
+<p>方法区中的垃圾收集行为比较少，这个区域的内存回收目标主要是针对常量池的回收和对类型的卸载，一般来说，回收效果比较难令人满意</p>
+<p>方法区在无法满足新的内存分配需求时，会抛出OutOfMemoryError异常</p>
+<h4 id="运行时常量池"><a href="#运行时常量池" class="headerlink" title="运行时常量池"></a>运行时常量池</h4><p>方法区的一部分，Class文件中除了有类的版本、字段、方法、接口等描述信息外，还有一项信息是常量池表，存放各种字面量和符号引用，这部分内容在类加载后存放到方法区的运行时常量池中</p>
+<p>一般来说，会把Class文件中描述的符号引用和由符号引用翻译出来的直接引用存储在运行时常量池中</p>
+<p>运行时常量池具有动态性，也就是说，并非预置入Class文件中常量池的内容才能进入方法区运行时常量池，运行期间也可以将新的常量放入池中，最常见的时String类的intern()方法</p>
+<p>与方法区一样，常量池无法申请到内存时也会抛出OutOfMemoryError异常</p>
+<h3 id="堆"><a href="#堆" class="headerlink" title="堆"></a>堆</h3><p>堆(Heap)是虚拟机管理的内存中最大的一块，被所有线程共享，在虚拟机启动时创建。用于存放对象实例。</p>
+<p>从分配内存的角度看(区别于垃圾收集器的分代管理)，堆可以划分出多个线程私有的分配缓冲区(TLAB)，提升对象分配的效率。</p>
+<p>《Java虚拟机规范》中规定，堆可以处于物理上不连续逻辑上连续的内存空间中，但对于大对象，多数虚拟机出于实现简单、存储高效的考虑，很可能会要求连续的内存空间。</p>
+<p>堆可以是固定大小的，也可以是可扩展的，通过-Xmx和-Xms来设定，当堆中没有内存来进行实例分配，且堆无法再扩展时，虚拟机会抛出OutOfMemoryError异常</p>
+<h2 id="直接内存"><a href="#直接内存" class="headerlink" title="直接内存"></a>直接内存</h2><p>直接内存不是虚拟机运行时数据区的一部分，但也被频繁地使用。</p>
+<p>jdk1.4新加入的NIO类，引入了一种基于通道(Channel)和缓冲区(Buffer)的I/O方式，使用Native函数库分配堆外内存，然后通过存储在堆中的DirectByteBuffer对象作为这块内存的引用来进行操作，这样可以避免在Java堆和Native堆中来回复制数据。</p>
+<p>直接内存不受堆大小限制，但总会有不够用的时候，当各内存区域总和大于物理内存时，虚拟机进行动态扩展时会抛出OutOfMemoryError异常</p>
+
+        </div>
+
+        
+            <section class="post-copyright">
+                
+                    <p class="copyright-item">
+                        <span>Author:</span>
+                        <span>yisorz</span>
+                    </p>
+                
+                
+                    <p class="copyright-item">
+                        <span>Permalink:</span>
+                        <span><a href="http://yisorz.github.io/2020/04/20/JVM-%E5%86%85%E5%AD%98%E6%A8%A1%E5%9E%8B/">http://yisorz.github.io/2020/04/20/JVM-%E5%86%85%E5%AD%98%E6%A8%A1%E5%9E%8B/</a></span>
+                    </p>
+                
+                
+                    <p class="copyright-item">
+                        <span>License:</span>
+                        <span>Copyright (c) 2019 <a href="http://creativecommons.org/licenses/by-nc/4.0/" target="_blank" rel="noopener">CC-BY-NC-4.0</a> LICENSE</span>
+                    </p>
+                
+                
+                     <p class="copyright-item">
+                         <span>Slogan:</span>
+                         <span>Do you believe in <strong>DESTINY</strong>?</span>
+                     </p>
+                
+
+            </section>
+        
+        <section class="post-tags">
+            <div>
+                <span>Tag(s):</span>
+                <span class="tag">
+                    
+                    
+                        <a href="/tags/JVM/"># JVM</a>
+                    
+                        
+                </span>
+            </div>
+            <div>
+                <a href="javascript:window.history.back();">back</a>
+                <span>· </span>
+                <a href="/">home</a>
+            </div>
+        </section>
+        <section class="post-nav">
+            
+            
+            <a class="next" rel="next" href="/2020/04/20/%E6%AF%8F%E6%97%A5%E5%88%B7%E9%A2%98-%E5%A4%9A%E7%BA%BF%E7%A8%8B%E8%BD%AE%E6%B5%81%E6%89%93%E5%8D%B0/">多线程轮流打印</a>
+            
+        </section>
+
+
+    </article>
+</div>
+
+        </div>
+        <footer id="footer" class="footer">
+    <div class="copyright">
+        <span>© yisorz | Powered by <a href="https://hexo.io" target="_blank">Hexo</a> & <a href="https://github.com/Siricee/hexo-theme-Chic" target="_blank">Chic</a></span>
+    </div>
+</footer>
+
+    </div>
+</body>
+</html>
